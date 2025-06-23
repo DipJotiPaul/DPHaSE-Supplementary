@@ -4,34 +4,39 @@ from scipy.special import jv,jvp,hankel1,h1vp, hankel1e
 import cmath, time
 import random
 
+#create the geometry by randomly distributing circle inside a box. The position of the center, their radii and polar coordinates with respect to on edge of the box are returned
+#"fill" is the filling factor, "a" the length of one size of the box, "mean_radius" the average radius and #std_radius# the standard deviation of the radius
 def random_particles(fill,a, mean_radius, std_radius):
     
-    # Initialize list to store particle positions
-    positions = []
-    rad = []
+    # Initialize lists
+    positions = [] #position of the centers of the rods
+    rad = [] #radius of the rods
     
-    #hlaf gaussian values
+    #define the mean and std of the half gaussian to be the same as the values passed to the function
     std_half = np.sqrt((std_radius**2)/(1-2/np.pi))
     mean_half = mean_radius-np.sqrt(2*(std_half**2)/np.pi)
     
-    # Generate random positions for particles
+    # Generate random positions for particles until their total area occupies the desired filling factor
     while np.sum((np.pi*np.abs(rad)**2))/(a**2)<fill:
             rad.append(sp.stats.truncnorm.rvs(0, np.inf,loc=mean_half,scale=std_half))
-            
+
+    #places the cicles inside the box. Note that generating the circles while placing them deforms the distribution, that's why they were generated outside the loop
     for j in range(len(rad)):
         inte=0
         while True:
-            # Generate random coordinates for particle from 0,0
+            # Generate random cartesian coordinates for the particle with origin at 0,0
             x = np.random.uniform(0, a)
             y = np.random.uniform(0, a)
             inte=inte+1
-
+            
             # Check if particle overlaps with existing particles
             overlap = False
-            
+
+            #it is not guaranteed that the particle will fit in the box, so after too many tries we generate a new radius. This minimizes the distortion of the distribution
             if inte>10**6:
                 rad[j]=sp.stats.halfnorm.rvs(loc=mean_half,scale=std_half)
-                
+
+            #condition for two circle to overlap
             for i in range(len(positions)):
                 if np.linalg.norm(np.array(positions[i]) - np.array([x+1j*y])) < rad[i]+rad[j]:
                     overlap = True
@@ -42,11 +47,11 @@ def random_particles(fill,a, mean_radius, std_radius):
                 positions.append([x+1j*y])
                 break
                 
-    x, y = np.meshgrid(positions, positions)
-    z = x - y
-    r = np.abs(z)
-    theta = np.angle(z)
-    nrod = len(positions)
+    x, y = np.meshgrid(positions, positions) #define a vector with the positions
+    z = x - y #define a vector with the relative distances
+    r = np.abs(z) #radial position in polar coordinates
+    theta = np.angle(z) #angular position in polar coordinates
+    nrod = len(positions) #number of particles generated
     
     print("geometry done")
     
