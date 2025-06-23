@@ -256,9 +256,11 @@ def worker(lam):
 def main():
     
     lam = np.logspace(-2,1,1000) #wavelengths we want to probe
-
-    iterations=np.arange(0,100,1) #how many times we want to run for each lambda, the result of the figures are averaged over 100 runs
-    data=np.zeros((100,len(lam))) #store the final data
+    
+    iters=100 #how many times we want to run for each lambda, the result of the figures are averaged over 100 runs
+    iterations=np.arange(0,iters,1) 
+    
+    data=np.zeros((iters,len(lam))) #store the final data
 
     #loop in the iterations
     for i in iterations:
