@@ -112,7 +112,7 @@ def axion(k0, radius, epsilon, nfour):
 #"k0" is the wave vector in vacuum, "r" is a list with the radial distance between each fiber, "theta" is a list with the radial distance between each fiber, "nfour" is the number of harmoncis as from -nfour to nfour, "nrod" is the number of rods
 def coupling_matrix(k0, r, theta, nrod, nfour):
 
-    if ntige == 1: #no coupling matrix if only 1 rod
+    if nrod == 1: #no coupling matrix if only 1 rod
         s = []
     else:
         P = 2*nfour+1  #total number of harmonics
