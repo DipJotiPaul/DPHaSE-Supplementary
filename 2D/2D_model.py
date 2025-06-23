@@ -80,71 +80,79 @@ def cylinder_T_matrix(i,k0, radius, epsilon, nfour,loss):
 
     return T
 
-
+#Axion source matrix (see eq B11 in the paper)
+#"k0" is the wave vector in vacuum, "radius" is a list with the radii of each rod, "epsilon" is a list with the electric constant of each rod, "nfour" is the number of harmoncis as from -nfour to nfour 
 def axion(k0, radius, epsilon, nfour):
     
-    P = 2 * nfour + 1
-    nu = np.sqrt(epsilon)
-    E0=((1/nu**2)-1)
-    d = np.arange(-nfour, nfour + 1)
-    ar1 = k0*radius.reshape(len(radius),1)
-    ar2 = k0*nu*radius.reshape(len(nu),1)
+    P = 2 * nfour + 1  #total number of harmonics
+    nu = np.sqrt(epsilon) #refractive index (note that there is no loss term here)
+    E0=((1/nu**2)-1) #induce electric field
+    d = np.arange(-nfour, nfour + 1) #list that runs through the harmonics
+    ar1 = k0*radius.reshape(len(radius),1) #argument for the bessel functions outside the cylinder
+    ar2 = k0*nu*radius.reshape(len(nu),1) #argument for the bessel functions inside the cylinder
     
-    D = -nu*jvp(0,ar2,1)*hankel1(0,ar1) + jv(0,ar2)*h1vp(0,ar1,1) 
-    N = nu*E0*jvp(0,ar2,1)
+    Dem = -nu*jvp(0,ar2,1)*hankel1(0,ar1) + jv(0,ar2)*h1vp(0,ar1,1) #denominator
+    Num = nu*E0*jvp(0,ar2,1) #numerator
     
-    SSE = (N/D).transpose()
+    SSE = (Num/Dem).transpose() #axion source matrix
 
+    #Kronecker  delta at the zeroth harmonic
     delta=np.zeros((2*nfour+1,1));
     delta[nfour]=1;
 
-    SSE=delta*SSE
+    SSE=delta*SSE #final axion source matrix
+
+    #reshaping to be consistent with the T-matrix 
     SSE=SSE.transpose()
-    
     SSE=SSE.ravel()
     
     return SSE
 
+#Geometrical matrx coupling the rods (see eq B19 of the paper)
+#"k0" is the wave vector in vacuum, "radius" is a list with the radii of each rod, "epsilon" is a list with the electric constant of each rod, "nfour" is the number of harmoncis as from -nfour to nfour, "nrod" is the number of rods
+def coupling_matrix(k0, r, theta, nrod, nfour):
 
-def coupling_matrix(k0, r, theta, ntige, nfour):
-
-    if ntige == 1:
+    if ntige == 1: #no coupling matrix if only 1 rod
         s = []
     else:
-        P = 2*nfour+1
-        nmat = ntige*(ntige-1)//2
-        inx=np.zeros(nmat,int)
-        iny=np.zeros(nmat,int)
+        P = 2*nfour+1  #total number of harmonics
+        nmat = nrod*(nrod-1)//2 #size of the matrix, pairing the rods
+        inx=np.zeros(nmat,int) #index runs through the size of the matrix
+        iny=np.zeros(nmat,int) #index runs through the size of the matrix
         
-        sp1 = np.zeros((nmat,2*nfour+1,2*nfour+1),complex)
-        spp = np.zeros((ntige,ntige,2*nfour+1,2*nfour+1),complex)
-        sp2 = np.zeros((nmat,2*nfour+1,2*nfour+1),complex)
-        k, l = np.meshgrid(np.arange(-nfour, nfour + 1), np.arange(-nfour, nfour + 1))
-        ind=0
-        
-        for m in range(ntige):
-            for nn in range(m+1,ntige):
+        sp1 = np.zeros((nmat,2*nfour+1,2*nfour+1),complex) #matrix size is number of pairs per harmonic per harmonic
+        sp2 = np.zeros((nmat,2*nfour+1,2*nfour+1),complex) #matrix size is number of pairs per harmonic per harmonic
+        spp = np.zeros((nrod,nrod,2*nfour+1,2*nfour+1),complex) #matrix size is number of pairs per harmonic per harmonic, will be the G matrix after reshaping
+
+        k, l = np.meshgrid(np.arange(-nfour, nfour + 1), np.arange(-nfour, nfour + 1)) #contain the harmonics pairs
+        ind=0 #will run through the matrix
+
+        #fill the paired indeces to correctly account for their respectave rod 
+        for m in range(nrod):
+            for nn in range(m+1,nrod):
                 ind += 1
                 inx[ind-1] = m
                 iny[ind-1] = nn
 
+        #runs over the pairs
         for m in range(nmat):
             ans = np.exp(1j*(k-l)*theta[inx[m],iny[m]])*hankel1(l-k, k0*r[inx[m],iny[m]])
-            sp1[m] = ans
-            sp2[m] =(-1.0)**(k-l)*ans
+            sp1[m] = ans #matrix for the pair in the position inx[m],iny[m]
+            sp2[m] =(-1.0)**(k-l)*ans #matrix for the pair in the position iny[m],iny[m] this is the transpose
 
+        #store the values in the spp matrix
         for n in range(len(inx)):
             spp[inx[n],iny[n]] = sp1[n]
             spp[iny[n],inx[n]] = sp2[n]
             
-
-        for n in range(ntige):
+        #the diagonals are zero
+        for n in range(nrod):
             spp[n,n]=np.zeros((P,P))
             
+        #reshape to be consistent with the T matrix and the Axion source matrix
+        G_matrix=np.vstack([np.hstack(c) for c in spp])
         
-        s=np.vstack([np.hstack(c) for c in spp])
-        
-    return s
+    return G_matrix
 
 
 def mapfield(ycarte, radius, k0, affixe, nfour, nrod, BE):
