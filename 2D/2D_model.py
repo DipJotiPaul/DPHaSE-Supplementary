@@ -58,22 +58,25 @@ def random_particles(fill,a, mean_radius, std_radius):
     return np.array(positions), np.array(rad), nrod, r, theta
 
 
+#creates the T matrix for the cylinder (see eq. B5 of the paper)
+#"k0" is the wave vector in vacuum, "radius" is a list with the radii of each rod, "epsilon" is a list with the electric constant of each rod, "nfour" is the number of harmoncis as from -nfour to nfour, "loss" is the amount of dielectric loss in units of conductivity  
 def cylinder_T_matrix(i,k0, radius, epsilon, nfour,loss):
     
-    lambd=2*np.pi/k0
-    P = 2 * nfour + 1
-    nu = np.sqrt(epsilon) + 1j*(loss/100)*lambd #loss is included
+    lambd=2*np.pi/k0 #wavelength in vacuum
+    P = 2 * nfour + 1 #total number of harmonics
+    nu = np.sqrt(epsilon) + 1j*(loss/100)*lambd #refractive index
 
-    d = np.arange(-nfour, nfour + 1)
-    ar1 = k0*radius
-    ar2 = k0*nu*radius.reshape(len(nu),1)
-    d2, ar2 = np.meshgrid(d, ar2)
-    d1, ar1 = np.meshgrid(d, ar1)
+    d = np.arange(-nfour, nfour + 1) #list that runs through the harmonics
+    ar1 = k0*radius #argument for the bessel functions outside the cylinder
+    ar2 = k0*nu*radius.reshape(len(nu),1) #argument for the bessel functions inside the cylinder
+    d2, ar2 = np.meshgrid(d, ar2) #the T matrix is matrix in harmonic space for each rod
+    d1, ar1 = np.meshgrid(d, ar1) #the T matrix is matrix in harmonic space for each rod
 
-    N = -nu*np.ones((1,P))*jvp(d2,ar2,1)*hankel1(d1,ar1) + jv(d2,ar2)*h1vp(d1,ar1,1)    
-    D = nu*np.ones((1,P))*jv(d1,ar1)*jvp(d2,ar2,1)-jv(d2, ar2)*jvp(d1, ar1,1)
-    
-    T = np.diag((D/N).ravel())
+    Dem = -nu*np.ones((1,P))*jvp(d2,ar2,1)*hankel1(d1,ar1) + jv(d2,ar2)*h1vp(d1,ar1,1) #denominator
+    Num = nu*np.ones((1,P))*jv(d1,ar1)*jvp(d2,ar2,1)-jv(d2, ar2)*jvp(d1, ar1,1) #numerator
+
+    #T matrix
+    T = np.diag((Num/Dem).ravel())
 
     return T
 
