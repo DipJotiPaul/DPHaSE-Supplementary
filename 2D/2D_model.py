@@ -249,7 +249,7 @@ def worker(lam):
     a = 20*np.sqrt(10) #size of the box, just make sure it is reasonable with the filling factor, if it is too large the code becomes inefficient
     fill = 0.5 #filling factor
     
-    poynting = power(radius0, sigma, a, fill, lam, D, L) #call the function for a particular wavelength
+    poynting = power(radius0, sigma, a, fill, lam, L) #call the function for a particular wavelength
     
     return poynting
 
