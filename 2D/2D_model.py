@@ -49,8 +49,8 @@ def random_particles(fill,a, mean_radius, std_radius):
                 
     x, y = np.meshgrid(positions, positions) #define a vector with the positions
     z = x - y #define a vector with the relative distances
-    r = np.abs(z) #radial position in polar coordinates
-    theta = np.angle(z) #angular position in polar coordinates
+    r = np.abs(z) #radial distance between each fiber
+    theta = np.angle(z) #angular distance between each fiber
     nrod = len(positions) #number of particles generated
     
     print("geometry done")
@@ -109,7 +109,7 @@ def axion(k0, radius, epsilon, nfour):
     return SSE
 
 #Geometrical matrx coupling the rods (see eq B19 of the paper)
-#"k0" is the wave vector in vacuum, "radius" is a list with the radii of each rod, "epsilon" is a list with the electric constant of each rod, "nfour" is the number of harmoncis as from -nfour to nfour, "nrod" is the number of rods
+#"k0" is the wave vector in vacuum, "r" is a list with the radial distance between each fiber, "theta" is a list with the radial distance between each fiber, "nfour" is the number of harmoncis as from -nfour to nfour, "nrod" is the number of rods
 def coupling_matrix(k0, r, theta, nrod, nfour):
 
     if ntige == 1: #no coupling matrix if only 1 rod
@@ -127,7 +127,7 @@ def coupling_matrix(k0, r, theta, nrod, nfour):
         k, l = np.meshgrid(np.arange(-nfour, nfour + 1), np.arange(-nfour, nfour + 1)) #contain the harmonics pairs
         ind=0 #will run through the matrix
 
-        #fill the paired indeces to correctly account for their respectave rod 
+        #fill the paired indeces to correctly account for their respectave rod, as given by the r and theta in the fucntion defined above
         for m in range(nrod):
             for nn in range(m+1,nrod):
                 ind += 1
@@ -155,122 +155,116 @@ def coupling_matrix(k0, r, theta, nrod, nfour):
     return G_matrix
 
 
-def mapfield(ycarte, radius, k0, affixe, nfour, nrod, BE):
-    mf = np.arange(-nfour, nfour + 1)
-    m, n = ycarte.shape
-    ZE = np.empty((m, n), dtype=np.complex128)
+#function to compute the electric field inside the cylinders given the solution of the scattering problem (see eq B17 in the paper)
+#"ycarte" is a list with the [x+j*y] positions we want to compute the electric field, "D_coeff" are the solutions of the system,"affixe" is a list with the position of the center of each fiber, "k0" is the wave vector in vacuum, "radius" is a list with the radii of each rod, "nfour" is the number of harmoncis as from -nfour to nfour, "nrod" is the number of rods
+def mapfield(ycarte, radius, k0, affixe, nfour, nrod, D_coeff):
+    mf = np.arange(-nfour, nfour + 1) #run through the harmonics
+    m, n = ycarte.shape #run through the points we want the electric field at
+    ZE = np.empty((m, n), dtype=np.complex128) #will store the electric field
+
+    #fill the list
     for l in range(m):
         for p in range(n):
             R = []
-            indice = np.where(np.abs(ycarte[l, p] - affixe) - radius.reshape(nrod,1) < 0)[0]
+            indice = np.where(np.abs(ycarte[l, p] - affixe) - radius.reshape(nrod,1) < 0)[0] #pick the values outside the cylinder
             if len(indice) == 0:
-                pc = ycarte[l, p] - affixe
+                pc = ycarte[l, p] - affixe #points we want the electric field at with the rods as the origin
                 mmf, pc = np.meshgrid(mf, pc)
-                R = (hankel1(mmf, k0 * np.abs(pc)) * np.exp(1j * np.angle(pc) * mmf)).flatten()
-                ZE[l, p] = np.dot(R, BE)
+                R = (hankel1(mmf, k0 * np.abs(pc)) * np.exp(1j * np.angle(pc) * mmf)).flatten() #matrix of the hankel functions in harmonic space
+                ZE[l, p] = np.dot(R, D_coeff) #electric field
 
     return ZE
 
+#integrate the poynting vector over a detector that occupies the whole angular domain encompasing the configuration
+#"a" is the box size, "steptheta" and "stepr" are the discretization of the angular/radial coordinate for integration, "L" is the distance of the detector to the center of the box
+def integrate_over_angle(a, steptheta, stepr, L, radius, k0, epsilon, affixe, nfour, nrod, D_coeff):
 
-def integrate_over_det(a, xmin, xmax, stepx, stepy, gpoyn, radius, k0, epsilon, affixe, nfour, nrod, BE):
-    xpoyn, ypoyn = np.meshgrid(np.arange(xmin, xmax + stepx, stepx), [-stepy, stepy])
-    ppoyn = xpoyn + a / 2 + 1j * ypoyn + gpoyn
-    ZpE = mapfield(ppoyn, radius, k0, affixe, nfour, nrod, BE)
-    uE = np.diff(ZpE, axis=0) / (2 * stepy)
-    FluxPE = 1j * ZpE * np.conj(uE) / (2 * k0)
-    PE = np.sum(FluxPE[0, :] * stepx) / (xmax - xmin)
-    return PE
-
-def integrate_over_angle(a, steptheta, stepr, L, radius, k0, epsilon, affixe, nfour, nrod, BE):
+    #to find the magnetic field, we take a derivative of the electric field, so we compute it at L+dr and L-dr then substract
+    first_circle = (L-stepr)*np.cos(np.arange(0,2*np.pi,steptheta)) + 1j*( (L-stepr)*np.sin(np.arange(0,2*np.pi,steptheta))) #cartesian coordinates at L-dr
+    second_circle= (L+stepr)*np.cos(np.arange(0,2*np.pi,steptheta)) + 1j*( (L+stepr)*np.sin(np.arange(0,2*np.pi,steptheta))) #cartesian coordinates at L-dr
     
-    first_circle = (L-stepr)*np.cos(np.arange(0,2*np.pi,steptheta)) + 1j*( (L-stepr)*np.sin(np.arange(0,2*np.pi,steptheta)))
-    second_circle= (L+stepr)*np.cos(np.arange(0,2*np.pi,steptheta)) + 1j*( (L+stepr)*np.sin(np.arange(0,2*np.pi,steptheta)))
-    
-    ppoyn=np.array([first_circle,second_circle])
-    ZpE = mapfield(ppoyn, radius, k0, affixe, nfour, nrod, BE)
-    uE = np.diff(ZpE, axis=0) / (2 * stepr)
-    FluxPE = 1j * ZpE * np.conj(uE) / (2 * k0)
-    PE = L*np.sum(FluxPE[0, :] * steptheta)
+    ppoyn=np.array([first_circle,second_circle]) #array with all the points we want to compute the electric field at
+    ZpE = mapfield(ppoyn, radius, k0, affixe, nfour, nrod, D_coeff) #computes the electric field at the points above
+    uE = np.diff(ZpE, axis=0) / (2 * stepr) #find the magnetic field by taking a numerical derivative
+    FluxPE = 1j * ZpE * np.conj(uE) / (2 * k0) #compute the poynting vector
+    PE = L*np.sum(FluxPE[0, :] * steptheta) #numerical integration of the poynting vector over the whole angular domain
     
     return PE
 
-
-def power(radius0, sigma, a, fill, lam, D, L):
+#function that computes the power emitted by the configuration, build the matrix and call integrate_over_angle() to find the power
+#"radius0" is the mean radius of the particles, "sigma" is the standard deviation of particles, "a" is the box size, "fill" is the filling factor from 0 to 1, "lam" is a list with all the wavelengths we want to compute the power at, "L" is the radius of the detector that occupies the whole angular domain
+def power(radius0, sigma, a, fill, lam, L):
     
     nfour = 5 #number of harmonics
     
-    xmin = -D #size of the dector
-    xmax = D
-    gpoyn = -L * 1j 
-    stepx = D / 10 
-    stepy = 2e-10 
-    
-    stepr = 2e-10 
-    steptheta=np.pi/20 
+    stepr = 2e-10 #step to compute the magnetic field at integrate_over_angle()
+    steptheta=np.pi/20 #step to integrate the poynting vector at integrate_over_angle()
 
+    #builds the geometry and save the position, radius, number of rods, and relative radial/angular position
     affixe, radius, nrod, r, theta = random_particles(fill, a, radius0, sigma)
-    
-    epsilon0 = 1.77 * 1.77 #dielectric epsilon
+
+    #all cylinders will have the same dielectric constant in our case
+    epsilon0 = 1.77 * 1.77 #dielectric constant inside the cylinder
     epsilon = epsilon0 * np.ones((nrod, 1)) #all rods have the same dielectric constant
+    
     loss=0 #dielectric loss as defined in the paper
     
-    poynting = np.ones_like(lam)
-    
+    poynting = np.ones_like(lam) #intialize list
+
+    #for each wavelength, build the matrices and solves the system
     for i in range(len(lam)):
         
-        k0 = 2 * np.pi / lam[i]
-        if nfour == 0:
-            rreg = r + np.eye(r.shape[0])
-            G = hankel1(0, k0 * np.sqrt(epsilon0) * rreg)
-            np.fill_diagonal(G, 0)
-        else:
-            G = coupling_matrix(k0, r, theta, nrod, nfour) #G in the paper
+        k0 = 2 * np.pi / lam[i] #wave number in vacuum
 
+        #build the G and T matrix
+        G = coupling_matrix(k0, r, theta, nrod, nfour) #G in the paper
         T_matrix = cylinder_T_matrix(i,k0, radius, epsilon, nfour,loss) #T in the paper
 
-        if T_matrix.size == 0:
+        #matrix that will be inverted in eq B25 of the paper
+        if T_matrix.size == 0: #in case there are no cylinders we get identity
             HE = np.eye(T_matrix.shape[0])
         else:
-            HE = np.eye(G.shape[0]) - T_matrix @ G
+            HE = np.eye(G.shape[0]) - T_matrix @ G #build the matrix required for inversion 
 
+        #axion source matrix
         S = axion(k0, radius, epsilon, nfour)
-        
+
+        #solves the linear system in eq B25 of the paper
         D_coeff = np.linalg.solve(HE, S) #D in the paper
-        
+
+        #finds the power emitted by the configuration for these wavelength
         PE = integrate_over_angle(a, steptheta, stepr, L, radius, k0, epsilon, affixe, nfour, nrod, D_coeff)
         
-        poynting[i] = np.abs(PE)
-        
-        if i%10==0:
-            print(i)
+        poynting[i] = np.abs(PE) #stores the power
         
     return poynting
 
 
+#worker function, ready to be parallelized in the lam loop
 def worker(lam):
     
-    L = 100
-    D = 50
-    radius0 = 1
-    sigma = 0.1
-    a = 20*np.sqrt(10) 
-    fill = 0.5
+    L = 100 #detector radius
+    radius0 = 1 #average radius of the rods
+    sigma = 0.5 #standard deviation of the rods
+    a = 20*np.sqrt(10) #size of the box, just make sure it is reasonable with the filling factor, if it is too large the code becomes inefficient
+    fill = 0.5 #filling factor
     
-    poynting = power(radius0, sigma, a, fill, lam, D, L)
+    poynting = power(radius0, sigma, a, fill, lam, D, L) #call the function for a particular wavelength
     
     return poynting
 
 def main():
     
-    lam = np.logspace(-2,1,100)
-    
-    data=np.zeros((100,len(lam)))
-    iterations=np.arange(0,5,1)
-    
+    lam = np.logspace(-2,1,1000) #wavelengths we want to probe
+
+    iterations=np.arange(0,100,1) #how many times we want to run for each lambda, the result of the figures are averaged over 100 runs
+    data=np.zeros((100,len(lam))) #store the final data
+
+    #loop in the iterations
     for i in iterations:
         data[i]=worker(lam)
-        print("one done")
-    
+
+    #saves the data
     np.save("data_test.npy",data)
 
 main()
